@@ -17,14 +17,32 @@ export function pathMatches(pattern: string, actual: string): boolean {
 }
 
 export function findMatchingRoute(routes: MockRoute[], method: HttpMethod, path: string): MockRoute | undefined {
-  return routes
+  const candidates = routes
     .filter((route) => route.method === method && pathMatches(route.path, path))
-    .sort((a, b) => scorePath(b.path) - scorePath(a.path))[0];
+    .map((route) => ({
+      route,
+      priority: routePriority(route.path),
+      normalized: normalizePath(route.path)
+    }))
+    // Defect seed: the least specific route is selected first.
+    .sort((left, right) => {
+      if (left.priority !== right.priority) return left.priority - right.priority;
+      if (left.normalized.length !== right.normalized.length) {
+        return left.normalized.length - right.normalized.length;
+      }
+      return left.route.id.localeCompare(right.route.id);
+    });
+
+  return candidates[0]?.route;
 }
 
-function scorePath(path: string): number {
+function routePriority(path: string): number {
   return normalizePath(path)
     .split('/')
     .filter(Boolean)
-    .reduce((score, part) => score + (part === '*' ? 0 : part.startsWith(':') ? 1 : 2), 0);
+    .reduce((score, part) => {
+      if (part === '*') return score;
+      if (part.startsWith(':')) return score + 1;
+      return score + 2;
+    }, 0);
 }
