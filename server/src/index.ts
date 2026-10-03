@@ -1,3 +1,5 @@
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { findMatchingRoute } from './matcher.js';
 import { HttpError, methodFromRequest, readJson, sendJson, sendText } from './http.js';
@@ -166,8 +168,12 @@ function applyCors(response: ServerResponse): void {
   for (const [key, value] of Object.entries(corsHeaders())) response.setHeader(key, value);
 }
 
-server.listen(port, () => {
-  console.log(`API Mock server listening on http://localhost:${port}`);
-});
+const isMainModule = process.argv[1] ? realpathSync(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+
+if (isMainModule) {
+  server.listen(port, () => {
+    console.log(`API Mock server listening on http://localhost:${port}`);
+  });
+}
 
 export { server, store, handleRequest };

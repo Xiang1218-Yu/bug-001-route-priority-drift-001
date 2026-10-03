@@ -19,30 +19,32 @@ export function pathMatches(pattern: string, actual: string): boolean {
 export function findMatchingRoute(routes: MockRoute[], method: HttpMethod, path: string): MockRoute | undefined {
   const candidates = routes
     .filter((route) => route.method === method && pathMatches(route.path, path))
-    .map((route) => ({
-      route,
-      priority: routePriority(route.path),
-      normalized: normalizePath(route.path)
-    }))
-    // Defect seed: the least specific route is selected first.
-    .sort((left, right) => {
-      if (left.priority !== right.priority) return left.priority - right.priority;
-      if (left.normalized.length !== right.normalized.length) {
-        return left.normalized.length - right.normalized.length;
-      }
-      return left.route.id.localeCompare(right.route.id);
-    });
+    .sort((left, right) => comparePathSpecificity(left.path, right.path) || left.id.localeCompare(right.id));
 
-  return candidates[0]?.route;
+  return candidates[0];
 }
 
-function routePriority(path: string): number {
+function comparePathSpecificity(leftPath: string, rightPath: string): number {
+  const left = pathRanks(leftPath);
+  const right = pathRanks(rightPath);
+
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    // 缺少的段排在通配段之前，使 /users/me 精确结束时优先于 /users/me/*。
+    const leftRank = left[index] ?? -1;
+    const rightRank = right[index] ?? -1;
+    if (leftRank !== rightRank) return rightRank - leftRank;
+  }
+
+  return 0;
+}
+
+function pathRanks(path: string): number[] {
   return normalizePath(path)
     .split('/')
     .filter(Boolean)
-    .reduce((score, part) => {
-      if (part === '*') return score;
-      if (part.startsWith(':')) return score + 1;
-      return score + 2;
-    }, 0);
+    .map((part) => {
+      if (part === '*') return 0;
+      if (part.startsWith(':')) return 1;
+      return 2;
+    });
 }

@@ -9,11 +9,48 @@ test('matches exact and parameterized paths', () => {
   assert.equal(pathMatches('/assets/*', '/assets/js/app.js'), true);
 });
 
-test('prefers the most specific matching route', () => {
-  const store = new MockStore();
-  const routes = store.list();
-  const matched = findMatchingRoute(routes, 'GET', '/users/42');
-  assert.equal(matched?.id, 'seed-user');
+test('prefers exact, parameter, and wildcard routes in that order regardless of registration order', () => {
+  const exact = {
+    id: 'exact',
+    method: 'GET',
+    path: '/users/me',
+    statusCode: 200,
+    responseBody: 'exact'
+  };
+  const parameter = {
+    id: 'parameter',
+    method: 'GET',
+    path: '/users/:id',
+    statusCode: 200,
+    responseBody: 'parameter'
+  };
+  const wildcard = {
+    id: 'wildcard',
+    method: 'GET',
+    path: '/users/*',
+    statusCode: 200,
+    responseBody: 'wildcard'
+  };
+
+  assert.equal(findMatchingRoute([wildcard, parameter, exact], 'GET', '/users/me')?.id, 'exact');
+  assert.equal(findMatchingRoute([exact, wildcard, parameter], 'GET', '/users/42')?.id, 'parameter');
+  assert.equal(findMatchingRoute([parameter, exact, wildcard], 'GET', '/users/42/profile')?.id, 'wildcard');
+});
+
+test('does not let route order change equivalent-priority matches', () => {
+  const first = { id: 'a', method: 'GET', path: '/users/:id', statusCode: 200 };
+  const second = { id: 'b', method: 'GET', path: '/users/:id', statusCode: 200 };
+
+  assert.equal(findMatchingRoute([second, first], 'GET', '/users/42')?.id, 'a');
+  assert.equal(findMatchingRoute([first, second], 'GET', '/users/42')?.id, 'a');
+});
+
+test('keeps matching isolated by HTTP method', () => {
+  const getRoute = { id: 'get', method: 'GET', path: '/users/:id', statusCode: 200 };
+  const postRoute = { id: 'post', method: 'POST', path: '/users/:id', statusCode: 201 };
+
+  assert.equal(findMatchingRoute([postRoute, getRoute], 'GET', '/users/42')?.id, 'get');
+  assert.equal(findMatchingRoute([getRoute, postRoute], 'POST', '/users/42')?.id, 'post');
 });
 
 test('records a request as a mock route', () => {
